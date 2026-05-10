@@ -21,7 +21,8 @@ class Settings(BaseSettings):
 
     # Postgres
     postgres_user: str = Field("mao", alias="POSTGRES_USER")
-    postgres_password: str = Field(..., alias="POSTGRES_PASSWORD")
+    # Empty string is valid for local Postgres.app / trust auth.
+    postgres_password: str = Field("", alias="POSTGRES_PASSWORD")
     postgres_db: str = Field("mao", alias="POSTGRES_DB")
     postgres_host: str = Field("postgres", alias="POSTGRES_HOST")
     postgres_port: int = Field(5432, alias="POSTGRES_PORT")
@@ -52,8 +53,12 @@ class Settings(BaseSettings):
 
     @property
     def postgres_dsn(self) -> str:
+        if self.postgres_password:
+            auth = f"{self.postgres_user}:{self.postgres_password}"
+        else:
+            auth = self.postgres_user
         return (
-            f"postgresql+psycopg://{self.postgres_user}:{self.postgres_password}"
+            f"postgresql+psycopg://{auth}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 

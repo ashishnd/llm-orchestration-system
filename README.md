@@ -2,7 +2,7 @@
 
 > Containerized multi-agent system with dynamic routing, multi-hop RAG, multi-dimensional eval harness, and a self-improving prompt loop gated on human approval.
 
-Built for a Junior LLM Engineer assessment. Knowledge corpus: arXiv `cs.CL`. **138** unit tests, all hermetic (no real LLM/network calls in tests).
+Built for a Junior LLM Engineer assessment. Knowledge corpus: arXiv `cs.CL`. Default `pytest` is hermetic (no real LLM/network). Optional **live** OpenAI smoke tests live under [`tests/integration/`](tests/integration/) — see below.
 
 ---
 
@@ -11,12 +11,20 @@ Built for a Junior LLM Engineer assessment. Knowledge corpus: arXiv `cs.CL`. **1
 ```bash
 # 1. Clone and configure
 cp .env.example .env
-# edit .env: at minimum set OPENAI_API_KEY
+# edit .env: set OPENAI_API_KEY; set POSTGRES_* (see comments in .env.example)
 
-# 2. Populate the corpus snapshot (one-time, requires network)
+# 2. Corpus + Chroma (needed for meaningful RAG / eval)
 pip install -e ".[dev]"
-python -m scripts.ingest_corpus --snapshot-only
+# First time: fetch arXiv papers and write data/arxiv_corpus/papers.jsonl + Chroma
+python -m scripts.ingest_corpus
+# Later (offline, e.g. in Docker): rebuild Chroma from committed JSONL only
+python -m scripts.ingest_corpus --from-snapshot
+```
+Without `data/arxiv_corpus/papers.jsonl`, `docker compose`’s ingest step skips and the vector index stays **empty**.
 
+**Secrets:** Never commit `.env` or real API keys (`.env` is gitignored). Ship only [`.env.example`](.env.example) with placeholders; anyone cloning the repo copies it, fills `OPENAI_API_KEY`, and sets `POSTGRES_PASSWORD` for Docker Postgres.
+
+```bash
 # 3. Start everything
 docker compose up --build
 ```
@@ -33,6 +41,12 @@ To run tests:
 
 ```bash
 pytest
+```
+
+Live OpenAI integration smoke tests (costs API usage; not for CI by default):
+
+```bash
+RUN_LIVE_LLM=1 pytest -m live_llm tests/integration -v
 ```
 
 ---
@@ -208,7 +222,7 @@ multi-agent-orchestrator/
 │   ├── streaming/                  SSE event bus
 │   ├── eval/                       15 cases, scorer, runner, meta-agent
 │   └── api/                        FastAPI app, 5 endpoints
-├── tests/                          138 hermetic tests, no network
+├── tests/                          hermetic tests; integration/ optional live_llm
 ├── scripts/
 │   ├── ingest_corpus.py            arXiv → JSONL → Chroma
 │   └── run_eval.py                 CLI for the eval harness

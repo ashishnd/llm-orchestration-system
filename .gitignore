@@ -6,6 +6,8 @@ __pycache__/
 .coverage
 htmlcov/
 .env
+# Local Chroma persistence (rebuild via ingest / docker compose)
+data/chroma/
 *.egg-info/
 dist/
 build/

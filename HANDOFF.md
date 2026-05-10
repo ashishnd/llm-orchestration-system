@@ -10,15 +10,14 @@ Short checklist for the next person running or extending this repo.
 
 ## First-time local setup
 
-1. `cp .env.example .env` — set **`OPENAI_API_KEY`** and **`POSTGRES_PASSWORD`** (any non-empty secret for local Postgres).
+1. `cp .env.example .env` — set **`OPENAI_API_KEY`**. For **Docker Compose**, set a non-empty **`POSTGRES_PASSWORD`**. For **Postgres.app** on the host with no password, leave **`POSTGRES_PASSWORD`** empty and set **`POSTGRES_HOST=localhost`** (and user/db to match your cluster).
 2. `python -m venv .venv && source .venv/bin/activate` (or equivalent on Windows).
 3. `pip install -e ".[dev]"` — editable install must succeed (see `pyproject.toml` `[tool.setuptools.packages.find]`; only package **`app`** is shipped). SQLAlchemy **async** requires **`greenlet`** (listed in dependencies); if you see `No module named 'greenlet'`, reinstall from the lockfile/pyproject.
-4. **Corpus (optional but recommended before meaningful RAG):**  
-   `python -m scripts.ingest_corpus --snapshot-only` after a fetch, or full fetch per README. Without `data/arxiv_corpus/papers.jsonl`, Compose **skips** ingest and the API still starts with an **empty** Chroma index.
+4. **Corpus (needed for meaningful RAG):** First run `python -m scripts.ingest_corpus` (network) to create `data/arxiv_corpus/papers.jsonl` and Chroma. After that, `python -m scripts.ingest_corpus --snapshot-only` is offline. Without the JSONL file, Compose **skips** ingest and Chroma stays **empty**.
 
 ## Verify
 
-- **Tests:** `pytest` — currently **138 passed** (hermetic; no real network/LLM in the suite).
+- **Tests:** `pytest` — hermetic suite (default excludes `@pytest.mark.live_llm`). Live OpenAI smoke: `RUN_LIVE_LLM=1 pytest -m live_llm tests/integration -v`.
 - **API (Compose):** `docker compose up --build` → `http://localhost:8000/healthz` and `/docs`.
 - **Eval (Compose):** `docker compose run --rm worker python -m scripts.run_eval` (uses real LLM; costs apply).
 
