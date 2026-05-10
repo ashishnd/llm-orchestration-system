@@ -1,0 +1,114 @@
+# `docker compose up` brings up the full system with zero manual steps.
+#
+# Services:
+# - postgres: data, traces, eval runs, prompt rewrites
+# - redis: present for the worker queue (RQ); not required for in-process pipeline
+# - ingest: one-shot service that populates Chroma from the JSONL corpus
+# - api: FastAPI server, the only externally-exposed port
+# - worker: optional background worker (placeholder for RQ-based async runs;
+#           the API currently runs the orchestrator in-process per request).
+#
+# Configuration is env-var-only. .env.example is the template; copy to .env
+# and fill in OPENAI_API_KEY before running.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mao}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-mao}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-mao} -d $${POSTGRES_DB:-mao}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # One-shot service: populates Chroma with the JSONL corpus.
+  # Only runs once per `docker compose up` because it depends on the api
+  # service starting; api waits for `ingest` to finish via service_completed_successfully.
+  ingest:
+    build: .
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_URL: redis://redis:6379/0
+      CHROMA_PERSIST_DIR: /data/chroma
+      ARXIV_CORPUS_PATH: /data/arxiv_corpus
+    volumes:
+      - chroma:/data/chroma
+      - ./data/arxiv_corpus:/data/arxiv_corpus
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      sh -c "if [ -f /data/arxiv_corpus/papers.jsonl ]; then
+               python -m scripts.ingest_corpus --from-snapshot;
+             else
+               echo 'No JSONL snapshot present; skipping ingest. Run scripts/ingest_corpus.py locally first to populate data/arxiv_corpus/.';
+             fi"
+    restart: "no"
+
+  api:
+    build: .
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_URL: redis://redis:6379/0
+      CHROMA_PERSIST_DIR: /data/chroma
+      ARXIV_CORPUS_PATH: /data/arxiv_corpus
+    volumes:
+      - chroma:/data/chroma
+      - ./data/arxiv_corpus:/data/arxiv_corpus
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ingest:
+        condition: service_completed_successfully
+    ports:
+      - "${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+
+  # Optional worker for async eval runs. The API runs the per-query
+  # pipeline in-process; this is here for the eval harness, which can be
+  # invoked via docker compose run worker python -m scripts.run_eval.
+  worker:
+    build: .
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_URL: redis://redis:6379/0
+      CHROMA_PERSIST_DIR: /data/chroma
+      ARXIV_CORPUS_PATH: /data/arxiv_corpus
+    volumes:
+      - chroma:/data/chroma
+      - ./data/arxiv_corpus:/data/arxiv_corpus
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ingest:
+        condition: service_completed_successfully
+    # Default command: tail -f so the container stays up for `docker compose
+    # run worker python -m scripts.run_eval`. Override via `command:`.
+    command: ["tail", "-f", "/dev/null"]
+
+volumes:
+  pgdata:
+  chroma:
