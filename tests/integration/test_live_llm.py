@@ -38,7 +38,7 @@ async def test_openai_complete_smoke():
 
     client = _client()
     resp = await client.complete(
-        [LLMMessage(role="user", content='Reply with exactly the word OK and nothing else.')],
+        [LLMMessage(role="user", content="Reply with exactly the word OK and nothing else.")],
         temperature=0,
         max_tokens=16,
         json_mode=False,

@@ -175,6 +175,7 @@ Honest assessment of where the system breaks. Each item is something I'd address
 **Operational limitations**
 - Schema management uses `Base.metadata.create_all` on startup. No Alembic migrations — fine for assessment scope, not for production. A real deployment would have Alembic.
 - The "background worker" service in `docker-compose.yml` is a placeholder (`tail -f /dev/null`). The API runs the per-query pipeline in-process via `asyncio.create_task`; events stream live. A real production setup would push to RQ/Celery and stream from a Redis pubsub.
+- There is no separate **log-query microservice**: the brief’s observability is narrowed to **`GET /jobs/{job_id}/trace`** (full `SharedContext` JSON in Postgres) plus SSE during the run, rather than a dedicated log UI.
 - No authentication on the API. The brief didn't require it, but a real deployment would have at minimum bearer-token auth on `POST /prompt-rewrites/*/decide`.
 - The `code_exec` tool uses `subprocess` with a hard timeout. **It is NOT a security boundary.** Production would use gVisor / Firecracker / Docker-in-Docker with no network and a temp working dir.
 - LLM nondeterminism: even at `temperature=0`, OpenAI does not guarantee bit-exact reproducibility. Eval scores will be very stable across reruns but not byte-identical.

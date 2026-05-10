@@ -13,7 +13,7 @@ Short checklist for the next person running or extending this repo.
 1. `cp .env.example .env` — set **`OPENAI_API_KEY`**. For **Docker Compose**, set a non-empty **`POSTGRES_PASSWORD`**. For **Postgres.app** on the host with no password, leave **`POSTGRES_PASSWORD`** empty and set **`POSTGRES_HOST=localhost`** (and user/db to match your cluster).
 2. `python -m venv .venv && source .venv/bin/activate` (or equivalent on Windows).
 3. `pip install -e ".[dev]"` — editable install must succeed (see `pyproject.toml` `[tool.setuptools.packages.find]`; only package **`app`** is shipped). SQLAlchemy **async** requires **`greenlet`** (listed in dependencies); if you see `No module named 'greenlet'`, reinstall from the lockfile/pyproject.
-4. **Corpus (needed for meaningful RAG):** First run `python -m scripts.ingest_corpus` (network) to create `data/arxiv_corpus/papers.jsonl` and Chroma. After that, `python -m scripts.ingest_corpus --snapshot-only` is offline. Without the JSONL file, Compose **skips** ingest and Chroma stays **empty**.
+4. **Corpus:** The repo ships a committed [`data/arxiv_corpus/papers.jsonl`](data/arxiv_corpus/papers.jsonl) so Docker ingest can run **`--from-snapshot`** offline. To **grow** the corpus, run `python -m scripts.ingest_corpus` (network); it merges into the JSONL without wiping it. Locally, `python -m scripts.ingest_corpus --from-snapshot` repopulates Chroma only. If you delete the JSONL, Compose ingest **skips** and Chroma stays **empty**.
 
 ## Verify
 
@@ -55,7 +55,7 @@ Assessment AI-use log: **`AI_COLLABORATION.md`**.
 These were **not** automated in Cursor’s sandbox (no Docker, no GitHub push, no paid LLM eval). Do them on your machine before the deadline:
 
 1. **Git history (optional rubric story):** Review `scripts/initial_commits.sh` commit-by-commit; only run it on a **fresh clone** or backup branch if you want that narrative—it will create **23 commits** from staged groups. Then **`git push`** to your public repo.
-2. **Corpus snapshot:** Run `python -m scripts.ingest_corpus` (network) to create `data/arxiv_corpus/papers.jsonl`, or fetch then `python -m scripts.ingest_corpus --snapshot-only` if JSONL already exists. **Commit `papers.jsonl`** so graders reproduce the same RAG index.
+2. **Corpus snapshot:** Ensure `data/arxiv_corpus/papers.jsonl` is **committed** (default clone already has it). Re-run `python -m scripts.ingest_corpus` only if you intentionally expand the corpus, then commit the updated JSONL so graders stay aligned with your eval.
 3. **Real eval + DB rows:** `docker compose up --build`, then `docker compose run --rm worker python -m scripts.run_eval` so **`eval_runs` / `eval_scores`** are populated (requires **`OPENAI_API_KEY`** in `.env`).
 4. **Compose smoke test:** At least one full **`docker compose up`** to confirm ingest → API healthcheck → optional eval (volume paths, `POSTGRES_PASSWORD`, etc.).
 5. **Lint:** `ruff check .` and `ruff format .` — repo is configured to **ignore B008** (FastAPI `Depends` defaults). Run before every push.
