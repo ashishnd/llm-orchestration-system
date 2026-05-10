@@ -14,10 +14,12 @@ cp .env.example .env
 # edit .env: set OPENAI_API_KEY; set POSTGRES_* (see comments in .env.example)
 
 # 2. Corpus + Chroma (needed for meaningful RAG / eval)
+# Docker-only quick path: the repo includes papers.jsonl — skip the fetch below and go
+# straight to `docker compose up --build`; the ingest service runs --from-snapshot.
 pip install -e ".[dev]"
-# First time: fetch arXiv papers and write data/arxiv_corpus/papers.jsonl + Chroma
+# Expand corpus (optional): fetch from arXiv and merge into data/arxiv_corpus/papers.jsonl
 python -m scripts.ingest_corpus
-# Later (offline, e.g. in Docker): rebuild Chroma from committed JSONL only
+# Offline: repopulate local Chroma from JSONL only (same as Docker ingest)
 python -m scripts.ingest_corpus --from-snapshot
 ```
 Without `data/arxiv_corpus/papers.jsonl`, `docker compose`’s ingest step skips and the vector index stays **empty**.
