@@ -86,6 +86,14 @@ services:
       start_period: 20s
       retries: 5
 
+  frontend:
+    build: ./frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
   # Optional worker for async eval runs. The API runs the per-query
   # pipeline in-process; this is here for the eval harness, which can be
   # invoked via docker compose run worker python -m scripts.run_eval.
